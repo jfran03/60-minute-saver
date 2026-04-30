@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calgary Commute Honest Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ctrain: { DEFAULT: '#C8102E', dark: '#9E0C24' },
+            stampede: { DEFAULT: '#D45F2C' },
+          },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+  <div class="mx-auto max-w-4xl px-4 py-10">
+    <header class="mb-10 text-center">
+      <p class="text-sm font-medium uppercase tracking-widest text-ctrain">Calgary</p>
+      <h1 class="mt-1 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+        Commute Honest Calculator
+      </h1>
+      <p class="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-400">
+        Door-to-door minutes are not the whole story. This compares <strong class="text-slate-200">total cost</strong> and
+        <strong class="text-slate-200">productive minutes</strong> (hands and eyes free)—what Maps leaves out.
+      </p>
+    </header>
+
+    <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl backdrop-blur sm:p-8">
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">Origin</span>
+          <select id="suburb" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-ctrain focus:outline-none focus:ring-1 focus:ring-ctrain"></select>
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">Time of day</span>
+          <select id="tod" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-ctrain focus:outline-none focus:ring-1 focus:ring-ctrain"></select>
+        </label>
+        <label class="block sm:col-span-2 lg:col-span-2">
+          <span class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">Day</span>
+          <div class="flex rounded-lg border border-slate-700 bg-slate-950 p-1">
+            <button type="button" id="btn-weekday" class="weekend-toggle flex-1 rounded-md px-3 py-2 text-sm font-medium transition">Weekday</button>
+            <button type="button" id="btn-weekend" class="weekend-toggle flex-1 rounded-md px-3 py-2 text-sm font-medium transition">Weekend</button>
+          </div>
+        </label>
+      </div>
+      <p class="mt-4 text-xs text-slate-500">
+        Destination: <span class="text-slate-400">Downtown Calgary (7 Ave corridor)</span>
+        · Time value in score: <span class="text-slate-400">$25/hr</span> for non-productive minutes
+      </p>
+    </section>
+
+    <div id="verdict" class="mt-8 rounded-2xl border-2 px-6 py-5 text-center text-lg font-semibold tracking-tight"></div>
+
+    <div class="mt-8 grid gap-6 md:grid-cols-2">
+      <article id="card-drive" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"></article>
+      <article id="card-transit" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"></article>
+    </div>
+
+    <footer class="mt-12 border-t border-slate-800 pt-8 text-center text-xs leading-relaxed text-slate-600">
+      <p>Hardcoded estimates for demo—verify fares and parking before presenting.</p>
+      <p class="mt-1">Productive = hands &amp; eyes free (not podcasts while driving).</p>
+    </footer>
+  </div>
+
+  <script>
+    // Dollars per minute for non-productive time ($25/hr)
+    const TIME_VALUE_PER_MIN = 25 / 60;
+
+    const SUBURBS = [
+      { id: 'mahogany', label: 'Mahogany (SE)' },
+      { id: 'evergreen', label: 'Evergreen (SW)' },
+      { id: 'saddle_ridge', label: 'Saddle Ridge (NE)' },
+      { id: 'tuscany', label: 'Tuscany (NW)' },
+    ];
+
+    const TIMES = [
+      { id: 'am', label: 'AM rush' },
+      { id: 'mid', label: 'Midday' },
+      { id: 'pm', label: 'PM rush' },
+      { id: 'off', label: 'Off-peak / evening' },
+    ];
+
+    /**
+     * 16-cell matrix (weekday baseline). Each leg: m = door-to-door min, prod = productive min, $ = total CAD.
+     * Drive prod is always 0. Numbers are plausible stubs—replace with sourced values before demo.
+     */
+    const MATRIX = {
+      mahogany: {
+        am: {
+          drive: { m: 38, prod: 0, $: 36 },
+          transit: { m: 62, prod: 24, $: 3.7 },
+        },
+        mid: {
+          drive: { m: 30, prod: 0, $: 14 },
+          transit: { m: 78, prod: 18, $: 3.7 },
+        },
+        pm: {
+          drive: { m: 44, prod: 0, $: 34 },
+          transit: { m: 68, prod: 22, $: 3.7 },
+        },
+        off: {
+          drive: { m: 32, prod: 0, $: 16 },
+          transit: { m: 66, prod: 21, $: 3.7 },
+        },
+      },
+      evergreen: {
+        am: {
+          drive: { m: 36, prod: 0, $: 32 },
+          transit: { m: 56, prod: 30, $: 3.7 },
+        },
+        mid: {
+          drive: { m: 31, prod: 0, $: 15 },
+          transit: { m: 52, prod: 32, $: 3.7 },
+        },
+        pm: {
+          drive: { m: 42, prod: 0, $: 30 },
+          transit: { m: 58, prod: 28, $: 3.7 },
+        },
+        off: {
+          drive: { m: 30, prod: 0, $: 17 },
+          transit: { m: 54, prod: 30, $: 3.7 },
+        },
+      },
+      saddle_ridge: {
+        am: {
+          drive: { m: 34, prod: 0, $: 30 },
+          transit: { m: 48, prod: 36, $: 3.7 },
+        },
+        mid: {
+          drive: { m: 28, prod: 0, $: 14 },
+          transit: { m: 46, prod: 35, $: 3.7 },
+        },
+        pm: {
+          drive: { m: 52, prod: 0, $: 28 },
+          transit: { m: 50, prod: 35, $: 3.7 },
+        },
+        off: {
+          drive: { m: 36, prod: 0, $: 18 },
+          transit: { m: 47, prod: 34, $: 3.7 },
+        },
+      },
+      tuscany: {
+        am: {
+          drive: { m: 46, prod: 0, $: 44 },
+          transit: { m: 52, prod: 40, $: 3.7 },
+        },
+        mid: {
+          drive: { m: 34, prod: 0, $: 18 },
+          transit: { m: 48, prod: 38, $: 3.7 },
+        },
+        pm: {
+          drive: { m: 48, prod: 0, $: 38 },
+          transit: { m: 52, prod: 39, $: 3.7 },
+        },
+        off: {
+          drive: { m: 38, prod: 0, $: 20 },
+          transit: { m: 46, prod: 38, $: 3.7 },
+        },
+      },
+    };
+
+    function cloneLeg(leg) {
+      return { m: leg.m, prod: leg.prod, $: leg.$ };
+    }
+
+    /** Weekend tweaks: cheaper parking, slightly faster drives; Evergreen transit worse (fewer trips). */
+    function applyWeekend(suburb, cell) {
+      const drive = cloneLeg(cell.drive);
+      const transit = cloneLeg(cell.transit);
+      drive.$ = Math.max(6, drive.$ - 16);
+      drive.m = Math.max(22, drive.m - 4);
+      if (suburb === 'evergreen') {
+        drive.$ = Math.max(5, drive.$ - 4);
+        transit.m += 12;
+        transit.prod = Math.max(12, transit.prod - 10);
+      } else {
+        transit.m += 4;
+        transit.prod = Math.max(10, transit.prod - 4);
+      }
+      return { drive, transit };
+    }
+
+    function score(leg) {
+      const nonProd = Math.max(0, leg.m - leg.prod);
+      return leg.$ + nonProd * TIME_VALUE_PER_MIN;
+    }
+
+    function fmtMoney(n) {
+      return n.toFixed(2);
+    }
+
+    function renderCard(el, title, accentClass, leg) {
+      const nonProd = Math.max(0, leg.m - leg.prod);
+      const sc = score(leg);
+      el.innerHTML = `
+        <h2 class="text-sm font-semibold uppercase tracking-wide ${accentClass}">${title}</h2>
+        <dl class="mt-4 space-y-3 text-sm">
+          <div class="flex justify-between gap-4 border-b border-slate-800 pb-2">
+            <dt class="text-slate-500">Door-to-door</dt>
+            <dd class="font-medium text-white">${leg.m} min</dd>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-slate-800 pb-2">
+            <dt class="text-slate-500">Productive time</dt>
+            <dd class="font-medium text-emerald-400/90">${leg.prod} min</dd>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-slate-800 pb-2">
+            <dt class="text-slate-500">Non-productive</dt>
+            <dd class="font-medium text-slate-300">${nonProd} min</dd>
+          </div>
+          <div class="flex justify-between gap-4 border-b border-slate-800 pb-2">
+            <dt class="text-slate-500">Total cost</dt>
+            <dd class="font-medium text-white">$${fmtMoney(leg.$)}</dd>
+          </div>
+          <div class="flex justify-between gap-4 pt-1">
+            <dt class="text-slate-500">Weighted score <span class="text-slate-600">(lower wins)</span></dt>
+            <dd class="font-mono text-slate-300">${sc.toFixed(1)}</dd>
+          </div>
+        </dl>
+        <p class="mt-4 rounded-lg bg-slate-950/80 px-3 py-2 text-xs text-slate-400">
+          ${leg.m} min trip · ${leg.prod} productive min · $${fmtMoney(leg.$)}
+        </p>
+      `;
+    }
+
+    function render() {
+      const suburb = document.getElementById('suburb').value;
+      const tod = document.getElementById('tod').value;
+      const weekend = document.getElementById('btn-weekend').dataset.active === '1';
+      const base = MATRIX[suburb][tod];
+      const { drive, transit } = weekend ? applyWeekend(suburb, base) : { drive: cloneLeg(base.drive), transit: cloneLeg(base.transit) };
+
+      const sDrive = score(drive);
+      const sTransit = score(transit);
+      const takeTransit = sTransit < sDrive;
+
+      const verdictEl = document.getElementById('verdict');
+      if (takeTransit) {
+        verdictEl.className =
+          'mt-8 rounded-2xl border-2 border-ctrain bg-ctrain/15 px-6 py-5 text-center text-lg font-semibold tracking-tight text-white';
+        verdictEl.textContent = 'TAKE THE CTRAIN';
+      } else {
+        verdictEl.className =
+          'mt-8 rounded-2xl border-2 border-slate-600 bg-slate-800/50 px-6 py-5 text-center text-lg font-semibold tracking-tight text-slate-100';
+        verdictEl.textContent = 'JUST DRIVE';
+      }
+
+      renderCard(document.getElementById('card-drive'), 'Drive', 'text-slate-400', drive);
+      renderCard(document.getElementById('card-transit'), 'Transit', 'text-ctrain', transit);
+    }
+
+    function setWeekend(on) {
+      document.getElementById('btn-weekday').dataset.active = on ? '0' : '1';
+      document.getElementById('btn-weekend').dataset.active = on ? '1' : '0';
+      document.getElementById('btn-weekday').className =
+        'weekend-toggle flex-1 rounded-md px-3 py-2 text-sm font-medium transition ' +
+        (on ? 'text-slate-500 hover:text-slate-300' : 'bg-slate-800 text-white');
+      document.getElementById('btn-weekend').className =
+        'weekend-toggle flex-1 rounded-md px-3 py-2 text-sm font-medium transition ' +
+        (on ? 'bg-ctrain text-white' : 'text-slate-500 hover:text-slate-300');
+      render();
+    }
+
+    (function init() {
+      const suburbSel = document.getElementById('suburb');
+      SUBURBS.forEach((s) => {
+        const o = document.createElement('option');
+        o.value = s.id;
+        o.textContent = s.label;
+        suburbSel.appendChild(o);
+      });
+      const todSel = document.getElementById('tod');
+      TIMES.forEach((t) => {
+        const o = document.createElement('option');
+        o.value = t.id;
+        o.textContent = t.label;
+        todSel.appendChild(o);
+      });
+      suburbSel.addEventListener('change', render);
+      todSel.addEventListener('change', render);
+      document.getElementById('btn-weekday').addEventListener('click', () => setWeekend(false));
+      document.getElementById('btn-weekend').addEventListener('click', () => setWeekend(true));
+      setWeekend(false);
+    })();
+  </script>
+</body>
+</html>
