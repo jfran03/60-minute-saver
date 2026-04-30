@@ -31,6 +31,12 @@
       </p>
     </header>
 
+    <section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl backdrop-blur sm:p-8">
+      <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">I am a...</p>
+      <p class="mb-4 text-xs text-slate-500">Pick the habit that fits. The verdict's framing updates live.</p>
+      <div id="profile-grid" class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"></div>
+    </section>
+
     <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl backdrop-blur sm:p-8">
       <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <label class="block">
@@ -88,6 +94,67 @@
       { id: 'pm', label: 'PM rush' },
       { id: 'off', label: 'Off-peak / evening' },
     ];
+
+    // Calgary Transit monthly pass divided across ~43 work-day trips/month (verify rate before demo)
+    const MONTHLY_PASS = 115;
+    const TRIPS_PER_MONTH = 43;
+    const PASS_PER_TRIP = MONTHLY_PASS / TRIPS_PER_MONTH;
+    const EVENT_PARKING_FLAT = 35;
+
+    const PROFILES = [
+      {
+        id: 'daily',
+        label: 'Daily commuter',
+        sub: '5 days/wk, AM rush',
+        defaults: { tod: 'am', weekend: false },
+        tripsPerWeek: 10,
+        framing: 'monthly',
+        fareModel: 'pass',
+      },
+      {
+        id: 'hybrid',
+        label: 'Hybrid',
+        sub: '3 days/wk in office',
+        defaults: { tod: 'am', weekend: false },
+        tripsPerWeek: 6,
+        framing: 'weekly',
+        fareModel: 'single',
+      },
+      {
+        id: 'flex',
+        label: 'Flex / off-peak',
+        sub: 'avoid rush hour',
+        defaults: { tod: 'off', weekend: false },
+        tripsPerWeek: 8,
+        framing: 'weekly',
+        fareModel: 'single',
+      },
+      {
+        id: 'errands',
+        label: 'Errand chainer',
+        sub: 'daycare / gym / groceries',
+        defaults: { tod: 'pm', weekend: false },
+        tripsPerWeek: 10,
+        framing: 'weekly',
+        fareModel: 'single',
+        forceDrive: true,
+      },
+      {
+        id: 'visitor',
+        label: 'Occasional visitor',
+        sub: 'events / nights out',
+        defaults: { tod: 'pm', weekend: true },
+        tripsPerMonth: 1.5,
+        framing: 'perTrip',
+        fareModel: 'single',
+        eventParking: true,
+      },
+    ];
+
+    let activeProfileId = 'daily';
+    function getProfile() {
+      return PROFILES.find((p) => p.id === activeProfileId) || PROFILES[0];
+    }
 
     /**
      * 16-cell matrix (weekday baseline). Each leg: m = door-to-door min, prod = productive min, $ = total CAD.
@@ -252,16 +319,45 @@
       `;
     }
 
+    /**
+     * Profile-aware adjustments applied AFTER weekend transform but BEFORE scoring.
+     * Keeps the matrix canonical and lets profile choice be a thin overlay.
+     */
+    function applyProfile(profile, drive, transit) {
+      if (profile.fareModel === 'pass') {
+        transit.$ = PASS_PER_TRIP;
+      }
+      if (profile.eventParking) {
+        drive.$ = Math.max(drive.$, EVENT_PARKING_FLAT);
+      }
+      return { drive, transit };
+    }
+
+    function amortize(profile, perTripDelta) {
+      if (profile.framing === 'monthly') {
+        const weekly = perTripDelta * profile.tripsPerWeek;
+        return { period: 'month', dollars: weekly * 4.33 };
+      }
+      if (profile.framing === 'weekly') {
+        return { period: 'week', dollars: perTripDelta * profile.tripsPerWeek };
+      }
+      return { period: 'trip', dollars: perTripDelta };
+    }
+
     function render() {
       const suburb = document.getElementById('suburb').value;
       const tod = document.getElementById('tod').value;
       const weekend = document.getElementById('btn-weekend').dataset.active === '1';
+      const profile = getProfile();
       const base = MATRIX[suburb][tod];
-      const { drive, transit } = weekend ? applyWeekend(suburb, base) : { drive: cloneLeg(base.drive), transit: cloneLeg(base.transit) };
+      let { drive, transit } = weekend
+        ? applyWeekend(suburb, base)
+        : { drive: cloneLeg(base.drive), transit: cloneLeg(base.transit) };
+      ({ drive, transit } = applyProfile(profile, drive, transit));
 
       const sDrive = score(drive);
       const sTransit = score(transit);
-      const takeTransit = sTransit < sDrive;
+      const takeTransit = profile.forceDrive ? false : sTransit < sDrive;
       const premium = timePremium(drive, transit);
 
       const verdictEl = document.getElementById('verdict');
@@ -277,14 +373,21 @@
         verdictEl.className =
           'mt-8 rounded-2xl border-2 border-slate-600 bg-slate-800/50 px-6 py-5 text-center';
         bannerEl.className = 'text-lg font-semibold tracking-tight text-slate-100';
-        bannerEl.textContent = 'JUST DRIVE';
+        bannerEl.textContent = profile.forceDrive ? 'JUST DRIVE (transit not viable)' : 'JUST DRIVE';
       }
 
-      if (premium) {
+      if (profile.forceDrive) {
+        tradeEl.innerHTML = `Errand chains (daycare, groceries, gym) make transit impractical regardless of cost. Honest answer: drive, and know what it actually costs you.`;
+      } else if (premium) {
         const rateRounded = Math.round(premium.perHour);
+        const perTripSaving = takeTransit
+          ? sDrive - sTransit
+          : sTransit - sDrive;
+        const am = amortize(profile, perTripSaving);
+        const periodLine = `That works out to <strong class="text-white">$${fmtMoney(am.dollars)} per ${am.period}</strong> at your habit (${profile.label.toLowerCase()}).`;
         tradeEl.innerHTML = takeTransit
-          ? `Driving saves <strong class="text-white">${premium.minutesSaved} min</strong> for an extra <strong class="text-white">$${fmtMoney(premium.dollarPremium)}</strong> &mdash; that's <strong class="text-white">$${rateRounded}/hr</strong> for time you reclaim. If your hour is worth more, drive instead.`
-          : `Driving costs <strong class="text-white">$${fmtMoney(premium.dollarPremium)}</strong> more but saves <strong class="text-white">${premium.minutesSaved} min</strong> &mdash; about <strong class="text-white">$${rateRounded}/hr</strong>. Worth it for most hourly rates.`;
+          ? `Driving saves <strong class="text-white">${premium.minutesSaved} min</strong> for an extra <strong class="text-white">$${fmtMoney(premium.dollarPremium)}</strong> &mdash; that's <strong class="text-white">$${rateRounded}/hr</strong> for time you reclaim. ${periodLine}`
+          : `Driving costs <strong class="text-white">$${fmtMoney(premium.dollarPremium)}</strong> more but saves <strong class="text-white">${premium.minutesSaved} min</strong> &mdash; about <strong class="text-white">$${rateRounded}/hr</strong>. ${periodLine}`;
       } else {
         tradeEl.innerHTML = `Transit is also <strong class="text-white">as fast or faster</strong>. There's no time to "buy back" by driving.`;
       }
@@ -297,7 +400,50 @@
         : '';
 
       renderCard(document.getElementById('card-drive'), 'Drive', 'text-slate-400', drive, driveExtra);
-      renderCard(document.getElementById('card-transit'), 'Transit', 'text-ctrain', transit);
+      const transitExtra = profile.fareModel === 'pass'
+        ? `<div class="flex justify-between gap-4 pt-1">
+             <dt class="text-slate-500">Fare basis</dt>
+             <dd class="text-xs text-slate-400">Monthly pass &divide; ${TRIPS_PER_MONTH} trips</dd>
+           </div>`
+        : '';
+      renderCard(document.getElementById('card-transit'), 'Transit', 'text-ctrain', transit, transitExtra);
+    }
+
+    function setProfile(id) {
+      activeProfileId = id;
+      const p = getProfile();
+      if (p.defaults) {
+        if (p.defaults.tod) document.getElementById('tod').value = p.defaults.tod;
+        if (typeof p.defaults.weekend === 'boolean') {
+          setWeekend(p.defaults.weekend);
+          renderProfileButtons();
+          return;
+        }
+      }
+      renderProfileButtons();
+      render();
+    }
+
+    function renderProfileButtons() {
+      const grid = document.getElementById('profile-grid');
+      grid.innerHTML = '';
+      PROFILES.forEach((p) => {
+        const active = p.id === activeProfileId;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = [
+          'rounded-lg border px-3 py-3 text-left transition',
+          active
+            ? 'border-ctrain bg-ctrain/10 text-white'
+            : 'border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500 hover:bg-slate-900',
+        ].join(' ');
+        btn.innerHTML = `
+          <span class="block text-sm font-semibold tracking-tight">${p.label}</span>
+          <span class="mt-0.5 block text-xs text-slate-500">${p.sub}</span>
+        `;
+        btn.addEventListener('click', () => setProfile(p.id));
+        grid.appendChild(btn);
+      });
     }
 
     function setWeekend(on) {
@@ -331,6 +477,7 @@
       todSel.addEventListener('change', render);
       document.getElementById('btn-weekday').addEventListener('click', () => setWeekend(false));
       document.getElementById('btn-weekend').addEventListener('click', () => setWeekend(true));
+      renderProfileButtons();
       setWeekend(false);
     })();
   </script>

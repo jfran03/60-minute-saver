@@ -274,3 +274,42 @@ Do not present the verdict as moralizing ("you should take transit"). The produc
 ### 13.4 Acceptance check
 
 A new viewer who has used calgary.ca should be able to say "this looks like it could live on the city's site" without being told. If it still reads as a generic SaaS dashboard, the redesign has not landed.
+
+## 14. User habit profiles
+
+The verdict changes meaningfully depending on **how often** and **why** someone makes the trip. A 5-day in-office worker compounding savings is a different decision than a once-a-month Flames-game attendee. The MVP picks one habit profile up front and uses it to (a) frame the savings story, and (b) lightly adjust assumptions where it actually matters.
+
+### 14.1 The 5 habit types
+
+| # | Profile | Trips / week | What changes in the model | Story angle |
+|---|---------|---------------|----------------------------|-------------|
+| 1 | **Daily 5-day commuter** | 10 (5 round trips) | Use monthly transit pass cost (~$115 / 22 work days) instead of single fare; multiply savings by 10 trips/wk | "Switching saves you $X and Y hours every month - this is the 60-min hackathon claim made real" |
+| 2 | **Hybrid 3-day commuter** | 6 (Tue/Wed/Thu) | Single-ride fare still cheaper than monthly pass; multiply savings by 6 trips/wk | "Hybrid math: monthly pass is no longer the default - single fares win at 3 days/wk" |
+| 3 | **Flex / off-peak shifter** | Variable, 4-8 | Default time-of-day to off-peak; drive time better, parking still pricey, transit headways longer | "You already optimize traffic - here is the cost of that choice you have not seen" |
+| 4 | **Car-dependent errand chainer** | 6-10 | Add fixed $0/min "transit infeasible" penalty if user marks daycare/gym/groceries; verdict caveat: "drive (no transit option for your stops)" | "Honest answer: transit is not viable for your day. Here is what driving really costs you so you can plan accordingly." |
+| 5 | **Occasional downtown visitor** | 0.5-2 / month | Use event parking rate (~$25-40 flat), Stampede/Flames surge optional; do not amortize savings across a year | "For one trip the math is small, but event parking and one-beer rules tilt this more than people expect" |
+
+### 14.2 MVP implementation
+
+Add one input above the existing four: **"I am a..."** dropdown with the 5 profiles above. Profile selection should:
+
+- Set sensible defaults for time-of-day and weekday/weekend (e.g. Profile 1 -> AM rush + weekday; Profile 5 -> PM rush + weekend).
+- Switch the verdict's amortization line: per-trip vs per-week vs per-month.
+- For Profile 4, surface a small "transit not viable" badge on the transit card and force the verdict to **DRIVE** with an honest caveat instead of pretending transit is competitive.
+
+### 14.3 Numeric assumptions to source
+
+- [ ] Calgary Transit monthly adult pass price (was ~$115; verify 2026)
+- [ ] Average downtown event parking rate (Stampede / Flames nights vs ordinary evening)
+- [ ] Off-peak transit headway penalty (extra wait minutes vs AM rush)
+
+### 14.4 Out of scope for v1
+
+- Free-form habit input ("I work 4 days, 2 in office")
+- Saving habit profile across sessions
+- Multi-stop trip modeling beyond the binary "errands required: yes/no" for Profile 4
+- Loyalty / employer transit subsidy modeling
+
+### 14.5 Acceptance check
+
+A judge selecting **Profile 1 (daily 5-day)** should see the verdict expressed in **monthly dollars and hours**. Switching to **Profile 5 (occasional visitor)** should re-express the same trip as a **single-trip** comparison with event parking. If switching profiles does not visibly change the framing of the savings, the feature has not landed.
