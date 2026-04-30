@@ -231,8 +231,8 @@ Reference distribution from current weekday matrix:
 
 The current single-score verdict is fine for a snap recommendation, but it hides the trade. Two improvements, in increasing scope:
 
-- **Minimum (recommended for MVP):** keep the verdict, but show the time premium $/hr next to it. The user sees both the answer and the assumption.
-- **Stretch (was deferred as Option C):** promote the **time-value slider** from v2 to a small inline control on the verdict ("My time is worth: $20 / $30 / $50 / $75 / $100 per hour"). The verdict text updates live. This makes the demo interactive in a memorable way.
+- **Minimum (recommended for MVP, implemented):** keep the verdict, but show the time premium $/hr next to it. The user sees both the answer and the assumption.
+- **Stretch (implemented):** time-value tolerance row beneath the inputs with preset chips ($15 / $25 / $50 / $75 / $100) and a custom number input. Selecting a preset or typing a value re-runs scoring live. Verdict copy compares the implicit $/hr-to-buy-back-time against the user's chosen rate ("$42/hr to buy back time, more than your $25/hr, so transit wins").
 
 ### 12.4 Updated framing for the 30-second pitch
 
