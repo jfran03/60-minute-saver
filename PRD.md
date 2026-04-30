@@ -243,3 +243,34 @@ Replace "X productive min reclaimed" with the trade made explicit:
 ### 12.5 Anti-pattern to avoid
 
 Do not present the verdict as moralizing ("you should take transit"). The product's credibility depends on it sometimes saying drive. Section 11 outcome targets exist precisely so the model is not a transit advocacy tool.
+
+## 13. Design direction
+
+**Visual reference:** [calgary.ca](https://www.calgary.ca/home.html). The product should feel like it could plausibly belong to or be linked from the City of Calgary's own site. This buys credibility for free and sells the "honest civic tool" framing better than a generic dark-mode hackathon look.
+
+### 13.1 What to borrow from calgary.ca
+
+- **Light, almost-white background.** Off-white / very light grey (~`#F4F4F4` or `#FFFFFF`).
+- **High-contrast black text.** Near-black body copy, no medium grey for primary content.
+- **Sans-serif system stack.** Calgary uses a clean humanist sans; default to system sans (`-apple-system, Segoe UI, Helvetica, Arial`) for parity without webfonts.
+- **Red as the single accent color.** Calgary brand red (close to `#C8102E`, which we already use for `ctrain`). Reuse it for the verdict banner, primary buttons, and links. Avoid additional accent colors.
+- **Card layout with thin grey borders.** Subtle `1px` borders, generous padding, rounded but not chunky corners (`rounded-md` to `rounded-lg`, not `rounded-2xl`).
+- **Plain, factual labels.** Calgary's tone is functional, not marketing-y. Mirror it: "Door-to-door", "Total cost", "Time premium" - no exclamations, no emoji.
+- **Accessible defaults.** WCAG-style contrast, real `<label>` elements for inputs, focus rings visible.
+
+### 13.2 What to drop from the current MVP
+
+- Dark slate-950 background and white-on-dark text.
+- Red `ctrain/15` translucent fills for the verdict block.
+- Decorative uppercase "Calgary" eyebrow.
+- Amber accent on the time premium row (replace with red or near-black bold).
+
+### 13.3 Out of scope for the redesign
+
+- Replicating calgary.ca's full nav/header/footer chrome.
+- Pulling official logos or wordmarks (we are not the City; do not imply endorsement).
+- Webfonts, image assets, or any external CSS beyond Tailwind CDN.
+
+### 13.4 Acceptance check
+
+A new viewer who has used calgary.ca should be able to say "this looks like it could live on the city's site" without being told. If it still reads as a generic SaaS dashboard, the redesign has not landed.
