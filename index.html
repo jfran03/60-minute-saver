@@ -93,74 +93,74 @@
     const MATRIX = {
       mahogany: {
         am: {
-          drive: { m: 38, prod: 0, $: 36 },
-          transit: { m: 62, prod: 24, $: 3.7 },
+          drive: { m: 38, prod: 0, $: 30 },
+          transit: { m: 76, prod: 18, $: 3.7 },
         },
         mid: {
-          drive: { m: 30, prod: 0, $: 14 },
-          transit: { m: 78, prod: 18, $: 3.7 },
+          drive: { m: 30, prod: 0, $: 12 },
+          transit: { m: 82, prod: 14, $: 3.7 },
         },
         pm: {
-          drive: { m: 44, prod: 0, $: 34 },
-          transit: { m: 68, prod: 22, $: 3.7 },
+          drive: { m: 44, prod: 0, $: 28 },
+          transit: { m: 80, prod: 16, $: 3.7 },
         },
         off: {
-          drive: { m: 32, prod: 0, $: 16 },
-          transit: { m: 66, prod: 21, $: 3.7 },
+          drive: { m: 32, prod: 0, $: 14 },
+          transit: { m: 74, prod: 14, $: 3.7 },
         },
       },
       evergreen: {
         am: {
-          drive: { m: 36, prod: 0, $: 32 },
-          transit: { m: 56, prod: 30, $: 3.7 },
+          drive: { m: 36, prod: 0, $: 26 },
+          transit: { m: 74, prod: 18, $: 3.7 },
         },
         mid: {
-          drive: { m: 31, prod: 0, $: 15 },
-          transit: { m: 52, prod: 32, $: 3.7 },
+          drive: { m: 31, prod: 0, $: 13 },
+          transit: { m: 72, prod: 18, $: 3.7 },
         },
         pm: {
-          drive: { m: 42, prod: 0, $: 30 },
-          transit: { m: 58, prod: 28, $: 3.7 },
+          drive: { m: 42, prod: 0, $: 24 },
+          transit: { m: 78, prod: 16, $: 3.7 },
         },
         off: {
-          drive: { m: 30, prod: 0, $: 17 },
-          transit: { m: 54, prod: 30, $: 3.7 },
+          drive: { m: 30, prod: 0, $: 14 },
+          transit: { m: 74, prod: 18, $: 3.7 },
         },
       },
       saddle_ridge: {
         am: {
-          drive: { m: 34, prod: 0, $: 30 },
-          transit: { m: 48, prod: 36, $: 3.7 },
+          drive: { m: 34, prod: 0, $: 24 },
+          transit: { m: 50, prod: 24, $: 3.7 },
         },
         mid: {
-          drive: { m: 28, prod: 0, $: 14 },
-          transit: { m: 46, prod: 35, $: 3.7 },
+          drive: { m: 28, prod: 0, $: 12 },
+          transit: { m: 47, prod: 22, $: 3.7 },
         },
         pm: {
-          drive: { m: 52, prod: 0, $: 28 },
-          transit: { m: 50, prod: 35, $: 3.7 },
+          drive: { m: 52, prod: 0, $: 22 },
+          transit: { m: 52, prod: 22, $: 3.7 },
         },
         off: {
-          drive: { m: 36, prod: 0, $: 18 },
-          transit: { m: 47, prod: 34, $: 3.7 },
+          drive: { m: 36, prod: 0, $: 16 },
+          transit: { m: 48, prod: 22, $: 3.7 },
         },
       },
       tuscany: {
         am: {
-          drive: { m: 46, prod: 0, $: 44 },
-          transit: { m: 52, prod: 40, $: 3.7 },
+          drive: { m: 46, prod: 0, $: 38 },
+          transit: { m: 53, prod: 28, $: 3.7 },
         },
         mid: {
-          drive: { m: 34, prod: 0, $: 18 },
-          transit: { m: 48, prod: 38, $: 3.7 },
+          drive: { m: 34, prod: 0, $: 16 },
+          transit: { m: 49, prod: 24, $: 3.7 },
         },
         pm: {
-          drive: { m: 48, prod: 0, $: 38 },
-          transit: { m: 52, prod: 39, $: 3.7 },
+          drive: { m: 48, prod: 0, $: 34 },
+          transit: { m: 53, prod: 25, $: 3.7 },
         },
         off: {
-          drive: { m: 38, prod: 0, $: 20 },
-          transit: { m: 46, prod: 38, $: 3.7 },
+          drive: { m: 38, prod: 0, $: 18 },
+          transit: { m: 47, prod: 24, $: 3.7 },
         },
       },
     };
@@ -169,20 +169,24 @@
       return { m: leg.m, prod: leg.prod, $: leg.$ };
     }
 
-    /** Weekend tweaks: cheaper parking, slightly faster drives; Evergreen transit worse (fewer trips). */
+    /** Weekend tweaks by suburb profile to avoid one blunt global delta. */
     function applyWeekend(suburb, cell) {
       const drive = cloneLeg(cell.drive);
       const transit = cloneLeg(cell.transit);
-      drive.$ = Math.max(6, drive.$ - 16);
-      drive.m = Math.max(22, drive.m - 4);
-      if (suburb === 'evergreen') {
-        drive.$ = Math.max(5, drive.$ - 4);
-        transit.m += 12;
-        transit.prod = Math.max(12, transit.prod - 10);
-      } else {
-        transit.m += 4;
-        transit.prod = Math.max(10, transit.prod - 4);
-      }
+
+      const weekendProfiles = {
+        mahogany: { driveMinutes: -3, driveCost: -10, transitMinutes: 6, transitProd: -4 },
+        evergreen: { driveMinutes: -4, driveCost: -15, transitMinutes: 12, transitProd: -10 },
+        saddle_ridge: { driveMinutes: -3, driveCost: -9, transitMinutes: 4, transitProd: -3 },
+        tuscany: { driveMinutes: -3, driveCost: -9, transitMinutes: 3, transitProd: -3 },
+      };
+
+      const p = weekendProfiles[suburb];
+      drive.m = Math.max(22, drive.m + p.driveMinutes);
+      drive.$ = Math.max(5, drive.$ + p.driveCost);
+      transit.m += p.transitMinutes;
+      transit.prod = Math.max(10, transit.prod + p.transitProd);
+
       return { drive, transit };
     }
 

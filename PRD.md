@@ -123,3 +123,123 @@ We ship **`index.html` only** in-repo—markup, Tailwind CDN, and vanilla JS in 
 - [ ] Verify current downtown parking daily max (was ~$25; check ParkPlus rates)
 - [ ] Decide: include vehicle wear in cost? (CRA rate is ~$0.70/km — adds up fast and strengthens the case for transit, but some judges will call it abstract)
 - [ ] Decide: show the math, or just the verdict? (Showing math = more credibility; just verdict = cleaner demo)
+
+## 11. Rebalance spec (for matrix calibration)
+
+Purpose: prevent the score model from always choosing transit, while keeping the story honest and defensible.
+
+### 11.1 Outcome targets
+
+- Weekday outcome split target (16 cells): **Transit 10-12 wins, Drive 4-6 wins**
+- Weekend outcome split target (16 derived cells): **Transit 7-10 wins, Drive 6-9 wins**
+- Keep these anchor cells fixed:
+  - Tuscany + AM rush (weekday) -> **Transit wins**
+  - Mahogany + Midday (weekday) -> **Drive wins**
+  - Saddle Ridge + PM rush (weekday) -> **Transit wins**
+  - Evergreen + Weekend (at least midday/off-peak) -> **Drive wins**
+
+### 11.2 Margin targets (how decisive each verdict should feel)
+
+- Clear wins (most cells): score gap **>= 4.0**
+- Non-obvious flips (demo-worthy cells): score gap **1.0 to 3.5**
+- Avoid coin-flips in default demo states: score gap **< 1.0** should be rare (max 1-2 cells)
+
+### 11.3 Numeric guardrails for data entry
+
+Use these when editing the 16 base cells:
+
+- **Drive time (m):**
+  - AM/PM rush: usually 34-55
+  - Midday/off-peak: usually 26-42
+- **Transit time (m):**
+  - LRT-strong suburbs (Tuscany, Saddle Ridge): usually 45-58
+  - Transfer-heavy suburbs (Evergreen, Mahogany): usually 52-80
+- **Transit productive minutes (prod):**
+  - Set using: `prod = round(inVehicleTransitMinutes * 0.80 to 0.88)`
+  - Practical cap: `prod <= m - 8` (reserves at least 8 min for walk/wait/transfer friction)
+  - For transfer-heavy routes, start closer to 0.75-0.82 productivity
+- **Drive cost ($):**
+  - Weekday downtown parking case: usually 24-44 total
+  - Midday/off-peak with lower parking: usually 12-24 total
+- **Transit cost ($):**
+  - Keep flat fare in MVP (single ride), update only after fare verification
+
+### 11.4 Weekend transformation rules (replace blunt global deltas)
+
+Do not apply one universal weekend delta to every suburb. Use suburb profile deltas:
+
+- **Mahogany weekend**
+  - Drive: `m -2 to -4`, `$ -8 to -14`
+  - Transit: `m +4 to +8`, `prod -3 to -6`
+- **Evergreen weekend** (force at least one clear drive-favoring surprise)
+  - Drive: `m -3 to -5`, `$ -12 to -18`
+  - Transit: `m +8 to +14`, `prod -8 to -14`
+- **Saddle Ridge weekend**
+  - Drive: `m -2 to -4`, `$ -8 to -12`
+  - Transit: `m +2 to +6`, `prod -2 to -5`
+- **Tuscany weekend**
+  - Drive: `m -2 to -4`, `$ -8 to -12`
+  - Transit: `m +2 to +5`, `prod -2 to -4`
+
+### 11.5 Validation checklist (must pass before demo)
+
+- [ ] At least 4-5 cells produce verdicts that feel non-obvious or counter-intuitive
+- [ ] No impossible values (`prod > m`, negative dollars, etc.)
+- [ ] Outcome split stays within target ranges in 11.1
+- [ ] Anchor cells in 11.1 still hold after all tuning
+- [ ] Chosen demo pair flips verdict in under 10 seconds
+- [ ] If score gaps are too large everywhere, reduce assumed transit productivity and/or reduce drive parking burden in select cells
+
+### 11.6 Demo pair recommendation after rebalance
+
+- **Cell A (transit win):** Tuscany + AM rush + Weekday
+- **Cell B (drive win):** Evergreen + Midday (or Off-peak) + Weekend
+
+This pair demonstrates one obvious case and one surprising case with a clear narrative for judges.
+
+## 12. The cost-vs-time trade (model honesty)
+
+### 12.1 The asymmetry
+
+At the current Calgary fare ($3.70 single ride) vs typical downtown drive cost ($12-$38), **transit wins on raw cost in every cell**. This is mathematically obvious and not interesting on its own.
+
+The interesting variable is **time**. Driving is faster door-to-door in nearly every scenario (in our matrix, drive saves 5-52 minutes vs transit). What we are really asking the user is:
+
+> "How much would you pay to save N minutes?"
+
+If the answer is "more than the drive's premium per hour", they should drive. If less, transit wins.
+
+### 12.2 Time premium metric (add to UI)
+
+Add an explicit metric to the Drive card and/or verdict banner:
+
+- `time_saved = transit.m - drive.m`  (minutes drive saves)
+- `dollar_premium = drive.$ - transit.$`  (extra dollars drive costs)
+- `time_premium_per_hour = (dollar_premium / time_saved) * 60`
+
+Display as: **"Driving costs $X to save Y min - that's $Z/hour for the time you reclaim."**
+
+This reframes the decision. The user no longer has to trust our $25/hr assumption; they can compare $Z/hour to their own hourly rate.
+
+Reference distribution from current weekday matrix:
+
+- Cheap to save time (drive is rational for most): Mahogany midday ~$10/hr, Saddle Ridge midday ~$26/hr
+- Mid premium (depends on personal rate): Evergreen AM ~$35/hr, Mahogany AM ~$42/hr
+- Expensive (transit clearly wins): Tuscany AM ~$294/hr, Tuscany PM ~$364/hr, Saddle Ridge PM is infinite (transit is also faster)
+
+### 12.3 Implication for scoring
+
+The current single-score verdict is fine for a snap recommendation, but it hides the trade. Two improvements, in increasing scope:
+
+- **Minimum (recommended for MVP):** keep the verdict, but show the time premium $/hr next to it. The user sees both the answer and the assumption.
+- **Stretch (was deferred as Option C):** promote the **time-value slider** from v2 to a small inline control on the verdict ("My time is worth: $20 / $30 / $50 / $75 / $100 per hour"). The verdict text updates live. This makes the demo interactive in a memorable way.
+
+### 12.4 Updated framing for the 30-second pitch
+
+Replace "X productive min reclaimed" with the trade made explicit:
+
+> "Driving saves you 38 minutes - and costs $26 more. That is $42 per hour just for the time. If your hour is worth more than $42 to you, drive. Otherwise the train is the honest answer. Most calculators do not even ask."
+
+### 12.5 Anti-pattern to avoid
+
+Do not present the verdict as moralizing ("you should take transit"). The product's credibility depends on it sometimes saying drive. Section 11 outcome targets exist precisely so the model is not a transit advocacy tool.
