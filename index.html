@@ -55,7 +55,10 @@
       </p>
     </section>
 
-    <div id="verdict" class="mt-8 rounded-2xl border-2 px-6 py-5 text-center text-lg font-semibold tracking-tight"></div>
+    <div id="verdict" class="mt-8 rounded-2xl border-2 px-6 py-5 text-center">
+      <p id="verdict-banner" class="text-lg font-semibold tracking-tight"></p>
+      <p id="verdict-trade" class="mt-2 text-sm font-normal text-slate-300"></p>
+    </div>
 
     <div class="mt-8 grid gap-6 md:grid-cols-2">
       <article id="card-drive" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"></article>
@@ -199,7 +202,23 @@
       return n.toFixed(2);
     }
 
-    function renderCard(el, title, accentClass, leg) {
+    /**
+     * Drive is almost always faster door-to-door but more expensive. The "time premium"
+     * is the implicit dollar-per-hour the user pays to buy back wall-clock minutes by driving.
+     * Returns null when drive is not faster (no premium to show).
+     */
+    function timePremium(drive, transit) {
+      const minutesSaved = transit.m - drive.m;
+      const dollarPremium = drive.$ - transit.$;
+      if (minutesSaved <= 0) return null;
+      return {
+        minutesSaved,
+        dollarPremium,
+        perHour: (dollarPremium / minutesSaved) * 60,
+      };
+    }
+
+    function renderCard(el, title, accentClass, leg, extraRow = '') {
       const nonProd = Math.max(0, leg.m - leg.prod);
       const sc = score(leg);
       el.innerHTML = `
@@ -221,10 +240,11 @@
             <dt class="text-slate-500">Total cost</dt>
             <dd class="font-medium text-white">$${fmtMoney(leg.$)}</dd>
           </div>
-          <div class="flex justify-between gap-4 pt-1">
+          <div class="flex justify-between gap-4 ${extraRow ? 'border-b border-slate-800 pb-2' : 'pt-1'}">
             <dt class="text-slate-500">Weighted score <span class="text-slate-600">(lower wins)</span></dt>
             <dd class="font-mono text-slate-300">${sc.toFixed(1)}</dd>
           </div>
+          ${extraRow}
         </dl>
         <p class="mt-4 rounded-lg bg-slate-950/80 px-3 py-2 text-xs text-slate-400">
           ${leg.m} min trip · ${leg.prod} productive min · $${fmtMoney(leg.$)}
@@ -242,19 +262,41 @@
       const sDrive = score(drive);
       const sTransit = score(transit);
       const takeTransit = sTransit < sDrive;
+      const premium = timePremium(drive, transit);
 
       const verdictEl = document.getElementById('verdict');
+      const bannerEl = document.getElementById('verdict-banner');
+      const tradeEl = document.getElementById('verdict-trade');
+
       if (takeTransit) {
         verdictEl.className =
-          'mt-8 rounded-2xl border-2 border-ctrain bg-ctrain/15 px-6 py-5 text-center text-lg font-semibold tracking-tight text-white';
-        verdictEl.textContent = 'TAKE THE CTRAIN';
+          'mt-8 rounded-2xl border-2 border-ctrain bg-ctrain/15 px-6 py-5 text-center';
+        bannerEl.className = 'text-lg font-semibold tracking-tight text-white';
+        bannerEl.textContent = 'TAKE THE CTRAIN';
       } else {
         verdictEl.className =
-          'mt-8 rounded-2xl border-2 border-slate-600 bg-slate-800/50 px-6 py-5 text-center text-lg font-semibold tracking-tight text-slate-100';
-        verdictEl.textContent = 'JUST DRIVE';
+          'mt-8 rounded-2xl border-2 border-slate-600 bg-slate-800/50 px-6 py-5 text-center';
+        bannerEl.className = 'text-lg font-semibold tracking-tight text-slate-100';
+        bannerEl.textContent = 'JUST DRIVE';
       }
 
-      renderCard(document.getElementById('card-drive'), 'Drive', 'text-slate-400', drive);
+      if (premium) {
+        const rateRounded = Math.round(premium.perHour);
+        tradeEl.innerHTML = takeTransit
+          ? `Driving saves <strong class="text-white">${premium.minutesSaved} min</strong> for an extra <strong class="text-white">$${fmtMoney(premium.dollarPremium)}</strong> &mdash; that's <strong class="text-white">$${rateRounded}/hr</strong> for time you reclaim. If your hour is worth more, drive instead.`
+          : `Driving costs <strong class="text-white">$${fmtMoney(premium.dollarPremium)}</strong> more but saves <strong class="text-white">${premium.minutesSaved} min</strong> &mdash; about <strong class="text-white">$${rateRounded}/hr</strong>. Worth it for most hourly rates.`;
+      } else {
+        tradeEl.innerHTML = `Transit is also <strong class="text-white">as fast or faster</strong>. There's no time to "buy back" by driving.`;
+      }
+
+      const driveExtra = premium
+        ? `<div class="flex justify-between gap-4 pt-1">
+             <dt class="text-slate-500">Time premium <span class="text-slate-600">(per hour saved)</span></dt>
+             <dd class="font-mono text-amber-300">$${Math.round(premium.perHour)}/hr</dd>
+           </div>`
+        : '';
+
+      renderCard(document.getElementById('card-drive'), 'Drive', 'text-slate-400', drive, driveExtra);
       renderCard(document.getElementById('card-transit'), 'Transit', 'text-ctrain', transit);
     }
 
